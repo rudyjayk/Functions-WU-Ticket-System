@@ -1,0 +1,111 @@
+//Get authentication and helpdesk url
+configuration = global_function_4();
+returnObj = Map();
+
+//Get helpdesk ID and request ID
+instanceJson = context.get("instance");
+helpdeskID = instanceJson.get("id");
+requestid = requestObj.get("id");
+
+//Set headers with authetication key and helpdesk ID
+headers = {"authtoken":configuration.get("technicianKey"),"PORTALID":helpdeskID};
+
+//Checks to see if a technician is assigned to ticket/request
+if("null".equalsIgnoreCase(requestObj.get("technician")))
+{
+//Sets input data to look for conversations that has been occurring in ticket
+input_data = {"list_info":{"start_index":1,"sort_order":"desc"}};
+
+//Invokes URL to get all conversations
+response = invokeurl
+[
+	url: configuration.get("url")+"/api/v3/requests/"+requestid+"/conversations"
+	type: GET
+	parameters: {"input_data":input_data}
+	headers: headers
+];
+
+//Checks if there has been any conversations in request
+if ( response.get('response_status').get(0).get('status') == 'success' &&  response.get('list_info').get('row_count') > 1)
+{
+
+//conv_tech = response.get("conversations").get(0).get("content_url");
+//Putting second URL ready to get information of recent conversation
+second_url =  response.get("conversations").get(1).get("content_url").toList("INPUT_DATA=");
+//info second_url;
+input_url = configuration.get("url") + second_url.get(0); //+ "INPUT_DATA="+ encodeUrl(second_url.get(1));
+//info input_url;
+
+//Invokes URL to get information of recent conversation
+response1 = invokeurl
+		[
+			url: input_url
+			type: GET
+			headers: headers
+		];
+		//info response1;
+        //Receives user ID of technician that has recently replied
+		userid = response1.get("notification").get("sender").get("id");
+		if (userid == "009"){
+			returnObj.insert("result" : "Failed");
+			returnObj.insert("message":"Administrator Replied");
+			return returnObj;
+			
+		}
+		
+        //Invokes URL to get user type for checks
+		user_response = invokeurl
+		[
+			url: configuration.get('url') + "/api/v3/users/"+userid
+			type: GET
+			headers: {"authtoken":configuration.get("technicianKey"),"portalid":helpdeskID}
+		];
+		user_type = user_response.get("user").get("type");
+		
+        //Checks to see if the user of the recent conversation is actually a technician
+        //Sets URL for assigning technician
+        //Sets input data
+        //Invokes URL to assign technician
+        //Depending on status of this URL response returns that status
+
+		if("Technician".equals(user_type))
+		{
+		url = configuration.get("url") +"/api/v3/requests/"+requestid;
+		input_data = {"request": {"technician": {"id": userid}}};
+		params = {"input_data": input_data};
+		response = invokeurl
+		[
+			url: url
+			type: PUT
+			parameters: params
+			headers: {"authtoken":configuration.get("technicianKey"),"portalid":helpdeskID}
+		];
+		//info response;
+		if (response.get("response_status").get("status")=='success')
+			{
+			returnObj.insert("result":"Success");
+			returnObj.insert("message":"Technician updated");
+			return returnObj;
+			}
+		else {
+			returnObj.insert("result":"Failure");
+			returnObj.insert("message":"Technician update failed");
+			return returnObj;
+			}
+		}
+		else 
+			{
+			returnObj.insert("result":"Failed");
+			returnObj.insert("message":"Reply is from requester");
+			return returnObj;
+			}
+		}
+		}
+else 
+			{
+			returnObj.insert("result":"Failed");
+			returnObj.insert("message":"Technician already assigned");
+			return returnObj;
+			}
+		
+return returnObj;
