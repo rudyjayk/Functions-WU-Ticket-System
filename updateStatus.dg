@@ -1,0 +1,34 @@
+//Get authentication information and helpdesk url
+configuration = global_function_4();
+
+//Get helpdesk ID and ticket ID
+instanceJson = context.get("instance");
+helpdeskID = instanceJson.get("id");
+workorderid = requestObj.get("id");
+
+//Set status to Open
+input_data = {
+			"request": {
+				"status": {
+					"name": "Open"
+					}
+			}
+		};
+
+//Invoke URL
+response = invokeurl
+[
+	url: configuration.get("url") + "/api/v3/requests/"+workorderid
+	type: PUT
+	parameters: {"input_data":input_data,"TECHNICIAN_KEY":configuration.get("technicianKey"),"PORTALID":helpdeskID}
+];
+
+//Returns depending on if the response was a success or not
+returnObj = Collection();
+if(response.get("response_status").get("status_code") == 2000) {
+	returnObj.insert("result":"Success","message":"Status Updated!");
+}
+else{
+	returnObj.insert("result":"failure","message":"Error in changing the request status");
+}
+return returnObj;

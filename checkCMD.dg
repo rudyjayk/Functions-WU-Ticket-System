@@ -1,0 +1,246 @@
+//Receives authentication permissions, and our helpdesk URL
+configuration = global_function_4();
+
+//Receives our reply templates
+replies = global_function_5();
+
+//Receives helpdesk and ticket ID
+instanceJson = context.get("instance");
+helpdeskID = instanceJson.get("id");
+workorderid = requestObj.get("id");
+
+//Assigns authentication and helpdesk ID
+headers = {"authtoken":configuration.get("technicianKey"),"PORTALID":helpdeskID};
+returnObj = Collection();
+
+//Sets URL and performs a get request to receive ticekt information
+url = "https://techsrv.whitworth.edu:8080/api/v3/requests/" + workorderid;
+request = invokeurl
+[
+url: url
+type: GET
+headers: headers
+];
+
+//Stores email and subject of requestor
+requestorEmail = request.get("request").get("requester").get("email_id");
+requestSubject = request.get("request").get("subject");
+
+//Stores "cmd" which on the end users side they will see a drop down 
+//  that they can pick what reply to use when editing a request
+cmd = request.get("request").get("udf_fields").get("udf_pick_304");
+
+//If no item is picked
+if(cmd == null){
+	returnObj.insert("result":"Failed", "message":"No command in Request!");
+	return returnObj;
+}
+
+//info cmd;
+
+// if (cmd.startsWith("{}") == false){
+// 	returnObj.insert("result":"Failed","message":"Command cannot be used");
+// 	return returnObj;
+// }
+
+// cmd = cmd.remove("{}");
+
+//info cmd;
+
+//If statements on how to set reply
+//Reply should be set similar to below:
+//Subject: Re: [Request ID :##RE-IDNUMBER##] : SUBJECTOFREQUEST
+//Description: Description
+//Email_ID = REQUESTOREMAIL
+
+//Creates a URL to reply to ticket
+url2 = "https://techsrv.whitworth.edu:8080/api/v3/requests/" + workorderid + "/notifications";
+
+//Flag used to change Status of ticket
+changeStatus = false;
+
+//Variable that stores status of ticket
+toStatus = "";
+
+//Thes next If and Else statements, are for identifying which reply is wanting to be used and
+//  They will create the input_data accordingly and adjust the status as well
+if (cmd == "DUO - Activation Verification"){
+	input_data={
+	"notification": {
+        "subject": "Re: [Request ID :##"+ workorderid + "##] : " + requestSubject,
+		"description": replies.get("DUOA"),
+		"to": [
+           	 {
+              	  "email_id": requestorEmail
+            	}
+        	],
+        	"cc": [
+        	],
+        	"type": "reply"
+    	}
+	};
+	changeStatus = true;
+	toStatus = "OnHold";
+}
+else if(cmd == "DUO - Sent Activation Link"){
+	input_data={
+	"notification": {
+        "subject": "Re: [Request ID :##"+ workorderid + "##] : " + requestSubject,
+		"description": replies.get("DUOS"),
+		"to": [
+           	 {
+              	  "email_id": requestorEmail
+            	}
+        	],
+        	"cc": [
+        	],
+        	"type": "reply"
+    	}
+	};
+	changeStatus = true;
+	toStatus = "Resolved";
+}
+else if(cmd == "Resolved"){
+	input_data={
+	"notification": {
+        "subject": "Re: [Request ID :##"+ workorderid + "##] : " + requestSubject,
+		"description": replies.get("RES"),
+		"to": [
+           	 {
+              	  "email_id": requestorEmail
+            	}
+        	],
+        	"cc": [
+        	],
+        	"type": "reply"
+    	}
+	};
+	changeStatus = true;
+	toStatus = "Resolved";
+}
+else if (cmd == "Follow-Up"){
+	input_data={
+	"notification": {
+        "subject": "Re: [Request ID :##"+ workorderid + "##] : " + requestSubject,
+		"description": replies.get("FU"),
+		"to": [
+           	 {
+              	  "email_id": requestorEmail
+            	}
+        	],
+        	"cc": [
+        	],
+        	"type": "reply"
+    	}
+	};
+	changeStatus = true;
+	toStatus = "OnHold";
+}
+else if (cmd == "Known Issue"){
+	input_data={
+	"notification": {
+        "subject": "Re: [Request ID :##"+ workorderid + "##] : " + requestSubject,
+		"description": replies.get("KI"),
+		"to": [
+           	 {
+              	  "email_id": requestorEmail
+            	}
+        	],
+        	"cc": [
+        	],
+        	"type": "reply"
+    	}
+	};
+	changeStatus = true;
+	toStatus = "Closed";
+}
+else if (cmd == "Please Call Us"){
+	input_data={
+	"notification": {
+        "subject": "Re: [Request ID :##"+ workorderid + "##] : " + requestSubject,
+		"description": replies.get("PCU"),
+		"to": [
+           	 {
+              	  "email_id": requestorEmail
+            	}
+        	],
+        	"cc": [
+        	],
+        	"type": "reply"
+    	}
+	};
+	changeStatus = true;
+	toStatus = "Closed";
+}
+else{
+	returnObj.insert("result":"Failed","Message":"Not a valid command");
+	return returnObj;
+}
+
+//Invokes URL call to put the reply in to the request and send it to requestor
+params={"input_data":input_data};
+addReply = invokeurl
+[
+url: url2
+type: POST
+parameters:params
+headers:headers
+];
+
+//Changes status accordingly depending on which reply was received
+if (changeStatus == true){
+	if (toStatus == "Resolved"){
+		input_data = {
+			"request": {
+				"status": {
+					"name": "Resolved"
+					},
+				"udf_fields":{
+					"udf_pick_304": null
+				}
+			}
+		};
+	}
+	else if(toStatus == "OnHold"){
+		input_data = {
+			"request": {
+				"status": {
+					"name": "OnHold"
+					},
+				"udf_fields":{
+					"udf_pick_304": null
+				}
+					
+			}
+		};
+	}
+	else if(toStatus == "Closed"){
+		input_data = {
+			"request": {
+				"status": {
+					"name": "Closed"
+					},
+				"udf_fields":{
+					"udf_pick_304": null
+				}
+					
+			}
+		};
+	}
+	
+	status = invokeurl
+	[
+		url: url
+		type: PUT
+		parameters: {"input_data":input_data, "TECHNICIAN_KEY":configuration.get("technicianKey"),"PORTALID":helpdeskID}
+	];
+	
+	returnObj.insert("result":"Success","message":"Reply has been added to request and status has been updated accordingly");
+	return returnObj;
+}
+
+
+returnObj.insert("result":"Success","message":"Reply has been added to request");
+
+//Return
+return returnObj;

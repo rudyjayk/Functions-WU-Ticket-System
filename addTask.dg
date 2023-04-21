@@ -1,0 +1,49 @@
+//Receives authentication permissions, and our helpdesk URL
+configuration = global_function_4();
+
+//Receive our helpdesk ID 
+instanceJson = context.get("instance");
+helpdeskID = instanceJson.get("id");
+
+//Receive ticket number
+workorderid = requestObj.get("id");
+
+//Setting authentication and helpdesk ID for URL request
+headers = {"authtoken":configuration.get("technicianKey"),"PORTALID":helpdeskID, "Accept":configuration.get("Accept"), "Content-Type":configuration.get("Content-Type")};
+
+//Sets task ID to 301 which is the task for computer replacements
+taskID = "301";
+
+//Sets data to be inputed
+input_data = {
+    "task": {
+		"title" : "New Computer Checklist",
+		"template" : {
+			  "id" : taskID
+	  }
+    }
+};
+
+
+/*Triggers an API call to add a note to the request*/
+response = invokeurl
+[
+    url :configuration.get("url") + "/api/v3/requests/" + workorderid + "/tasks"
+    type : POST
+	parameters: {"input_data": input_data}
+	headers: headers
+];
+
+
+returnObj = Collection();
+
+//Returns a status based on status of respons from URL
+if(response.get("response_status").get("status_code") == 2000) {
+	returnObj.insert("result":"success", "message": "Task has been added to request");
+}
+else{
+	returnObj.insert("result":"failure","message":"Task was not added to request");
+}
+
+//Return
+return returnObj;

@@ -1,0 +1,50 @@
+//Receives authentication permissions, and our helpdesk URL
+configuration = global_function_4();
+
+//Receive our helpdesk ID 
+instanceJson = context.get("instance");
+helpdeskID = instanceJson.get("id");
+
+//Receive ticket number
+workorderid = requestObj.get("id");
+
+//Setting authentication and helpdesk ID for URL request
+headers = {"authtoken":configuration.get("technicianKey"),"PORTALID":helpdeskID};
+
+//Setting value to add in note for our helpdesk instance 
+note_description = "PLEASE SEND FOLLOW UP REPLY!!!";
+
+//Sets data to be inputted
+input_data = Collection();
+input_data = {
+	"note" : {
+        "show_to_requester": false,
+        "notify_technician": true,
+        "mark_first_response": false,
+        "add_to_linked_requests": false,
+		"description" : note_description
+	}
+};
+
+
+/*Triggers an API call to add a note to the request*/
+response = invokeurl
+[
+    url :configuration.get("url") + "/api/v3/requests/" + workorderid + "/notes"
+    type : POST
+    parameters:{"input_data":input_data}
+	headers: headers
+];
+
+returnObj = Collection();
+
+//Sets return status based on status of URL response
+if(response.get("response_status").get("status_code") == 2000) {
+	returnObj.insert("result":"Success Note has been added to request");
+}
+else{
+	returnObj.insert("result":"failure","message":"Note was not added to request");
+}
+
+//Returns
+return returnObj;
